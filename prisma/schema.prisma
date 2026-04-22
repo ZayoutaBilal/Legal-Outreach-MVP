@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum PreferredContactMethod {
+  email
+  whatsapp
+  both
+}
+
+enum OutreachStatus {
+  pending
+  sent
+  failed
+}
+
+model Avocat {
+  id                       String        @id @default(uuid()) @db.VarChar(191)
+  full_name                String        @db.VarChar(191)
+  email                    String        @unique @db.VarChar(191)
+  phone                    String?       @db.VarChar(50)
+  city                     String?       @db.VarChar(191)
+  firm_name                String?       @db.VarChar(191)
+  preferred_contact_method PreferredContactMethod @default(email)
+  outreach_logs            OutreachLog[]
+
+  @@index([city])
+}
+
+model OutreachCampaign {
+  id            String        @id @default(uuid()) @db.VarChar(191)
+  name          String        @db.VarChar(191)
+  form_link     String        @db.Text
+  outreach_logs OutreachLog[]
+}
+
+model OutreachLog {
+  id            String          @id @default(uuid()) @db.VarChar(191)
+  avocat_id     String          @db.VarChar(191)
+  campaign_id   String          @db.VarChar(191)
+  status        OutreachStatus  @default(pending)
+  attempt_count Int             @default(0)
+  sent_at       DateTime?
+  error_message String?         @db.Text
+  avocat        Avocat          @relation(fields: [avocat_id], references: [id], onDelete: Cascade)
+  campaign      OutreachCampaign @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+
+  @@unique([avocat_id, campaign_id])
+  @@index([status, sent_at])
+  @@index([campaign_id])
+}
