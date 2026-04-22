@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { processOutreachBatch } from "@/lib/send-outreach";
 
 export const runtime = "nodejs";
-export const maxDuration = 900;
+export const maxDuration = 300;
 
 async function handleSend() {
   try {
