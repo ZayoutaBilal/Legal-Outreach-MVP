@@ -1,9 +1,13 @@
 {
+  "functions": {
+    "api/send.js": {
+      "maxDuration": 300
+    }
+  },
   "crons": [
     {
       "path": "/api/send",
-      "schedule": "0 9 * * *",
-      "maxDuration": 300
+      "schedule": "0 9 * * *"
     }
   ]
 }
