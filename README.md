@@ -87,7 +87,7 @@ Use a JSON array like this in the dashboard import flow:
 2. Either insert an `OutreachCampaign` row manually, or set `DEFAULT_FORM_LINK` so the app creates a default campaign automatically.
 3. New avocats are attached to the active campaign with a `pending` outreach log.
 4. Vercel cron calls `/api/send` every hour.
-5. The sender claims up to 10 pending rows, sends one email at a time, and writes success/failure back to the log.
+5. The sender processes exactly one email per run: first it tries the earliest `pending` log, and if none exist it retries the earliest `failed` log.
 
 ## Deployment on Vercel
 
@@ -100,6 +100,6 @@ Use a JSON array like this in the dashboard import flow:
 
 ## Notes
 
-- The send route intentionally processes a maximum of 10 emails per run.
-- It waits 60 seconds between sends to respect the requested pacing.
+- The send route intentionally processes one email per run.
+- It prefers the first `pending` outreach log and falls back to the first `failed` log only when no pending log exists.
 - For real production scale, a queue worker is a better fit than long function sleeps, but this implementation follows the MVP requirements exactly.
