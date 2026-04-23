@@ -25,7 +25,10 @@ export async function getOrCreateActiveCampaign() {
   });
 }
 
-export async function attachAvocatToActiveCampaign(avocatId: string) {
+export async function ensureOutreachLogForAvocat(
+  avocatId: string,
+  options?: { forcePending?: boolean }
+) {
   const campaign = await getOrCreateActiveCampaign();
 
   if (!campaign) {
@@ -44,8 +47,18 @@ export async function attachAvocatToActiveCampaign(avocatId: string) {
       campaign_id: campaign.id,
       status: "pending"
     },
-    update: {}
+    update: options?.forcePending
+      ? {
+          status: "pending",
+          error_message: null,
+          sent_at: null
+        }
+      : {}
   });
+}
+
+export async function attachAvocatToActiveCampaign(avocatId: string) {
+  return ensureOutreachLogForAvocat(avocatId);
 }
 
 export async function backfillPendingLogsForActiveCampaign() {
@@ -67,22 +80,23 @@ export async function backfillPendingLogsForActiveCampaign() {
   let createdCount = 0;
 
   for (const avocat of avocats) {
-    const result = await prisma.outreachLog.upsert({
+    const existing = await prisma.outreachLog.findUnique({
       where: {
         avocat_id_campaign_id: {
           avocat_id: avocat.id,
           campaign_id: campaign.id
         }
-      },
-      create: {
-        avocat_id: avocat.id,
-        campaign_id: campaign.id,
-        status: "pending"
-      },
-      update: {}
+      }
     });
 
-    if (result.status === "pending" && result.attempt_count === 0 && result.error_message === null) {
+    if (!existing) {
+      await prisma.outreachLog.create({
+        data: {
+          avocat_id: avocat.id,
+          campaign_id: campaign.id,
+          status: "pending"
+        }
+      });
       createdCount += 1;
     }
   }

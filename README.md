@@ -11,6 +11,7 @@ Minimal SaaS-style MVP built with Next.js App Router, Prisma, TiDB/MySQL, Nodema
 - Export avocat contacts as a JSON file
 - Hourly outreach sender via `/api/send`
 - Gmail SMTP delivery with Prisma logging
+- Twilio WhatsApp delivery for `whatsapp` and `both` contacts
 - Manual `Send Now` and `Retry Failed` actions
 - Vercel-ready cron configuration
 
@@ -55,15 +56,23 @@ Use a JSON array like this in the dashboard import flow:
 ```json
 [
   {
-    "full_name": "Maitre Sara Bennani",
-    "email": "sara@example.com",
+    "title": "Cabinet Avocat Sara Bennani",
     "phone": "+212600000000",
     "city": "Tanger",
-    "firm_name": "Bennani Legal",
-    "preferred_contact_method": "email"
+    "website": "https://example.com",
+    "reviewsCount": 8
   }
 ]
 ```
+
+Import behavior:
+
+- `phone` is normalized into Moroccan local format
+- `title` is cleaned into `full_name`
+- `city` is stored in uppercase
+- `firm_name` keeps the original title
+- rows are skipped when `phone` is missing or `reviewsCount < 5`
+- rows are skipped when another avocat already has the same phone or email
 
 ## Required environment variables
 
@@ -80,6 +89,9 @@ Use a JSON array like this in the dashboard import flow:
 - `YOUR_NAME`: closing name used in the email template
 - `DEFAULT_CAMPAIGN_NAME`: optional default campaign name used when the first avocat is created
 - `DEFAULT_FORM_LINK`: optional default questionnaire link used to auto-create the first campaign
+- `TWILIO_SID`: Twilio account SID for WhatsApp sending
+- `TWILIO_AUTH_TOKEN`: Twilio auth token
+- `TWILIO_WHATSAPP_NUMBER`: Twilio WhatsApp sender, usually in `whatsapp:+...` format
 
 ## Suggested data flow
 
@@ -102,4 +114,6 @@ Use a JSON array like this in the dashboard import flow:
 
 - The send route intentionally processes one email per run.
 - It prefers the first `pending` outreach log and falls back to the first `failed` log only when no pending log exists.
+- WhatsApp sends require a valid Moroccan mobile number starting with `06` or `07`.
+- Failed outreach logs stop retrying after 3 attempts.
 - For real production scale, a queue worker is a better fit than long function sleeps, but this implementation follows the MVP requirements exactly.

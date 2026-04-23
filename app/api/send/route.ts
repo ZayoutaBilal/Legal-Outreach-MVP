@@ -9,7 +9,7 @@ async function handleSend() {
     const result = await processOutreachBatch();
     const message =
       result.processed === 0
-        ? `No pending emails to send for ${result.campaignName}.`
+        ? `No eligible pending or failed outreach record to send for ${result.campaignName}.`
         : `Batch complete for ${result.campaignName}. ${result.sent} sent, ${result.failed} failed.`;
 
     return NextResponse.json({

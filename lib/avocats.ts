@@ -11,6 +11,14 @@ type AvocatInput = {
   preferred_contact_method?: unknown;
 };
 
+type RawApifyAvocat = {
+  title?: unknown;
+  phone?: unknown;
+  city?: unknown;
+  website?: unknown;
+  reviewsCount?: unknown;
+};
+
 const allowedContactMethods = new Set<PreferredContactMethod>([
   PreferredContactMethod.email,
   PreferredContactMethod.whatsapp,
@@ -36,6 +44,30 @@ function sanitizeRequiredString(value: unknown, fieldName: string) {
   return sanitized;
 }
 
+export function normalizePhone(phone: string) {
+  const compactPhone = phone.replace(/\s+/g, "").replace(/-/g, "");
+
+  if (compactPhone.startsWith("+212")) {
+    return `0${compactPhone.slice(4)}`;
+  }
+
+  if (compactPhone.startsWith("212")) {
+    return `0${compactPhone.slice(3)}`;
+  }
+
+  return compactPhone;
+}
+
+export function extractName(title: string) {
+  return title
+    .replace(/\b(avocate|avocat|lawyer|cabinet)\b/gi, " ")
+    .replace(/\u0645\u062D\u0627\u0645\u064A/gi, " ")
+    .replace(/[\/-]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function sanitizeContactMethod(value: unknown): PreferredContactMethod {
   if (typeof value === "string" && allowedContactMethods.has(value as PreferredContactMethod)) {
     return value as PreferredContactMethod;
@@ -45,11 +77,15 @@ function sanitizeContactMethod(value: unknown): PreferredContactMethod {
 }
 
 export function normalizeAvocatInput(input: AvocatInput) {
+  const email = sanitizeOptionalString(input.email)?.toLowerCase() || null;
+  const phone = sanitizeOptionalString(input.phone);
+  const city = sanitizeOptionalString(input.city);
+
   return {
     full_name: sanitizeRequiredString(input.full_name, "full_name"),
-    email: sanitizeRequiredString(input.email, "email").toLowerCase(),
-    phone: sanitizeOptionalString(input.phone),
-    city: sanitizeOptionalString(input.city),
+    email,
+    phone: phone ? normalizePhone(phone) : null,
+    city: city ? city.toUpperCase() : null,
     firm_name: sanitizeOptionalString(input.firm_name),
     preferred_contact_method: sanitizeContactMethod(input.preferred_contact_method)
   };
@@ -62,8 +98,45 @@ function isUniqueEmailError(error: unknown) {
   );
 }
 
+async function findDuplicateAvocat(
+  data: ReturnType<typeof normalizeAvocatInput>,
+  excludeId?: string
+) {
+  const duplicateConditions: Array<{ phone?: string | null; email?: string | null }> = [];
+
+  if (data.phone) {
+    duplicateConditions.push({ phone: data.phone });
+  }
+
+  if (data.email) {
+    duplicateConditions.push({ email: data.email });
+  }
+
+  if (!duplicateConditions.length) {
+    return null;
+  }
+
+  return prisma.avocat.findFirst({
+    where: {
+      OR: duplicateConditions,
+      ...(excludeId
+        ? {
+            id: {
+              not: excludeId
+            }
+          }
+        : {})
+    }
+  });
+}
+
 export async function createAvocat(input: AvocatInput) {
   const data = normalizeAvocatInput(input);
+  const existingAvocat = await findDuplicateAvocat(data);
+
+  if (existingAvocat) {
+    throw new Error("An avocat with the same phone or email already exists.");
+  }
 
   try {
     const avocat = await prisma.avocat.create({ data });
@@ -76,6 +149,59 @@ export async function createAvocat(input: AvocatInput) {
 
     throw error;
   }
+}
+
+export async function updateAvocat(id: string, input: AvocatInput) {
+  const data = normalizeAvocatInput(input);
+  const existingAvocat = await findDuplicateAvocat(data, id);
+
+  if (existingAvocat) {
+    throw new Error("Another avocat with the same phone or email already exists.");
+  }
+
+  try {
+    return await prisma.avocat.update({
+      where: { id },
+      data
+    });
+  } catch (error) {
+    if (isUniqueEmailError(error)) {
+      throw new Error("Another avocat with this email already exists.");
+    }
+
+    throw error;
+  }
+}
+
+export async function deleteAvocat(id: string) {
+  return prisma.avocat.delete({
+    where: { id }
+  });
+}
+
+function mapRawApifyRecord(record: RawApifyAvocat) {
+  const title = sanitizeOptionalString(record.title);
+  const phone = sanitizeOptionalString(record.phone);
+  const city = sanitizeOptionalString(record.city);
+  const reviewsCount =
+    typeof record.reviewsCount === "number"
+      ? record.reviewsCount
+      : Number(record.reviewsCount ?? 0);
+
+  if (!phone || reviewsCount < 5 || !title) {
+    return null;
+  }
+
+  const normalizedPhone = normalizePhone(phone);
+
+  return {
+    full_name: extractName(title) || title,
+    email: null,
+    phone: normalizedPhone,
+    city: city ? city.toUpperCase() : null,
+    firm_name: title,
+    preferred_contact_method: PreferredContactMethod.whatsapp
+  };
 }
 
 export async function importAvocats(payload: unknown) {
@@ -91,7 +217,25 @@ export async function importAvocats(payload: unknown) {
     const row = payload[index];
 
     try {
-      await createAvocat(row as AvocatInput);
+      const mappedRow = mapRawApifyRecord(row as RawApifyAvocat);
+
+      if (!mappedRow) {
+        skipped += 1;
+        errors.push(
+          `Row ${index + 1}: skipped because phone is missing, title is empty, or reviewsCount is below 5.`
+        );
+        continue;
+      }
+
+      const existingAvocat = await findDuplicateAvocat(normalizeAvocatInput(mappedRow));
+
+      if (existingAvocat) {
+        skipped += 1;
+        errors.push(`Row ${index + 1}: skipped duplicate phone or email.`);
+        continue;
+      }
+
+      await createAvocat(mappedRow);
       created += 1;
     } catch (error) {
       skipped += 1;

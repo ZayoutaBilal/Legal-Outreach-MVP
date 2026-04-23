@@ -10,10 +10,24 @@ type DashboardPayload = {
     pendingCount: number;
     failedCount: number;
   };
+  pagination: {
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+    search: string;
+  };
+  analytics: {
+    sentByChannel: Array<{ label: string; key: string; count: number }>;
+    sentByHour: Array<{ hour: string; count: number }>;
+    sentByDay: Array<{ day: string; count: number }>;
+    sentByWeek: Array<{ week: string; count: number }>;
+    sentByCity: Array<{ city: string; count: number }>;
+  };
   avocats: Array<{
     id: string;
     fullName: string;
-    email: string;
+    email: string | null;
     phone: string | null;
     city: string | null;
     firmName: string | null;
@@ -28,6 +42,7 @@ type DashboardPayload = {
     lastError: string | null;
     sentAt: string | null;
     campaignName: string;
+    city: string;
   }>;
 };
 
@@ -40,6 +55,24 @@ type ApiResult = {
   created?: number;
   skipped?: number;
   errors?: string[];
+};
+
+type FormState = {
+  full_name: string;
+  email: string;
+  phone: string;
+  city: string;
+  firm_name: string;
+  preferred_contact_method: "email" | "whatsapp" | "both";
+};
+
+const emptyForm: FormState = {
+  full_name: "",
+  email: "",
+  phone: "",
+  city: "",
+  firm_name: "",
+  preferred_contact_method: "email"
 };
 
 function formatDate(value: string | null) {
@@ -57,27 +90,37 @@ export function DashboardClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentStatus = searchParams.get("status") || "all";
+  const currentSearch = searchParams.get("search") || "";
+  const currentPage = Number(searchParams.get("page") || "1");
   const [data, setData] = useState<DashboardPayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [actionLoading, setActionLoading] = useState<
-    "send" | "retry" | "logout" | "add" | "import" | "export" | null
-  >(null);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    full_name: "",
-    email: "",
-    phone: "",
-    city: "",
-    firm_name: "",
-    preferred_contact_method: "email"
-  });
+  const [form, setForm] = useState<FormState>(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(currentSearch);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
 
     try {
-      const query = currentStatus !== "all" ? `?status=${currentStatus}` : "";
-      const response = await fetch(`/api/dashboard${query}`, { cache: "no-store" });
+      const params = new URLSearchParams();
+
+      if (currentStatus !== "all") {
+        params.set("status", currentStatus);
+      }
+
+      if (currentSearch) {
+        params.set("search", currentSearch);
+      }
+
+      if (currentPage > 1) {
+        params.set("page", String(currentPage));
+      }
+
+      const response = await fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+        cache: "no-store"
+      });
 
       if (!response.ok) {
         throw new Error("Unable to load dashboard data.");
@@ -90,84 +133,113 @@ export function DashboardClient() {
     } finally {
       setLoading(false);
     }
-  }, [currentStatus]);
+  }, [currentPage, currentSearch, currentStatus]);
 
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    setSearchInput(currentSearch);
+  }, [currentSearch]);
+
+  function updateParams(next: { status?: string; search?: string; page?: number }) {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (next.status !== undefined) {
+      if (next.status === "all") {
+        params.delete("status");
+      } else {
+        params.set("status", next.status);
+      }
+    }
+
+    if (next.search !== undefined) {
+      if (next.search.trim()) {
+        params.set("search", next.search.trim());
+      } else {
+        params.delete("search");
+      }
+    }
+
+    if (next.page !== undefined) {
+      if (next.page > 1) {
+        params.set("page", String(next.page));
+      } else {
+        params.delete("page");
+      }
+    }
+
+    router.replace(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
+  }
 
   function onFormChange(event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-  async function runAction(path: string, action: "send" | "retry" | "logout") {
-    setActionLoading(action);
+  function resetForm() {
+    setForm(emptyForm);
+    setEditingId(null);
+  }
+
+  async function runAction(path: string, actionKey: string, options?: { method?: string; body?: unknown }) {
+    setBusyKey(actionKey);
     setMessage(null);
 
     try {
       const response = await fetch(path, {
-        method: "POST"
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        throw new Error(payload.error || "Request failed.");
-      }
-
-      if (action === "logout") {
-        router.replace("/login");
-        router.refresh();
-        return;
-      }
-
-      const payload = (await response.json()) as ApiResult;
-      setMessage(
-        payload.message ||
-          `Processing complete. ${payload.sent ?? payload.resetCount ?? 0} action(s) applied.`
-      );
-      await loadDashboard();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Request failed.");
-    } finally {
-      setActionLoading(null);
-    }
-  }
-
-  async function handleAddAvocat(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setActionLoading("add");
-    setMessage(null);
-
-    try {
-      const response = await fetch("/api/avocats", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(form)
+        method: options?.method || "POST",
+        headers: options?.body
+          ? {
+              "Content-Type": "application/json"
+            }
+          : undefined,
+        body: options?.body ? JSON.stringify(options.body) : undefined
       });
 
       const payload = (await response.json()) as ApiResult & { error?: string };
 
       if (!response.ok) {
-        throw new Error(payload.error || "Unable to add avocat.");
+        throw new Error(payload.error || "Request failed.");
       }
 
-      setForm({
-        full_name: "",
-        email: "",
-        phone: "",
-        city: "",
-        firm_name: "",
-        preferred_contact_method: "email"
-      });
-      setMessage(payload.message || "Avocat added successfully.");
+      if (actionKey === "logout") {
+        router.replace("/login");
+        router.refresh();
+        return true;
+      }
+
+      setMessage(payload.message || "Action completed successfully.");
       await loadDashboard();
+      return true;
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to add avocat.");
+      setMessage(error instanceof Error ? error.message : "Request failed.");
+      return false;
     } finally {
-      setActionLoading(null);
+      setBusyKey(null);
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    let success = false;
+
+    if (editingId) {
+      success = await runAction(`/api/avocats/${editingId}`, "save-avocat", {
+        method: "PUT",
+        body: form
+      });
+    } else {
+      success = await runAction("/api/avocats", "add-avocat", {
+        method: "POST",
+        body: form
+      });
+    }
+
+    if (success) {
+      resetForm();
     }
   }
 
@@ -178,7 +250,7 @@ export function DashboardClient() {
       return;
     }
 
-    setActionLoading("import");
+    setBusyKey("import");
     setMessage(null);
 
     try {
@@ -206,12 +278,12 @@ export function DashboardClient() {
       setMessage(error instanceof Error ? error.message : "Unable to import avocats.");
     } finally {
       event.target.value = "";
-      setActionLoading(null);
+      setBusyKey(null);
     }
   }
 
   async function handleExport() {
-    setActionLoading("export");
+    setBusyKey("export");
     setMessage(null);
 
     try {
@@ -237,20 +309,20 @@ export function DashboardClient() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to export avocats.");
     } finally {
-      setActionLoading(null);
+      setBusyKey(null);
     }
   }
 
-  function updateFilter(status: string) {
-    const params = new URLSearchParams(searchParams.toString());
-
-    if (status === "all") {
-      params.delete("status");
-    } else {
-      params.set("status", status);
-    }
-
-    router.replace(`/dashboard${params.toString() ? `?${params.toString()}` : ""}`);
+  function startEdit(avocat: DashboardPayload["avocats"][number]) {
+    setEditingId(avocat.id);
+    setForm({
+      full_name: avocat.fullName,
+      email: avocat.email || "",
+      phone: avocat.phone || "",
+      city: avocat.city || "",
+      firm_name: avocat.firmName || "",
+      preferred_contact_method: avocat.preferredContactMethod
+    });
   }
 
   return (
@@ -262,8 +334,8 @@ export function DashboardClient() {
             Outreach dashboard
           </h1>
           <p className="page-subtitle">
-            Gere vos envois, suivez les erreurs et declenchez une campagne manuellement si
-            necessaire.
+            Search contacts, manage individual outreach, and monitor delivery performance by
+            channel, city, hour, day, and week.
           </p>
         </div>
 
@@ -278,27 +350,27 @@ export function DashboardClient() {
           </button>
           <button
             className="button button-primary"
-            disabled={actionLoading !== null}
+            disabled={busyKey !== null}
             onClick={() => void runAction("/api/send", "send")}
             type="button"
           >
-            {actionLoading === "send" ? "Sending..." : "Send Now"}
+            {busyKey === "send" ? "Sending..." : "Send Now"}
           </button>
           <button
             className="button button-danger"
-            disabled={actionLoading !== null}
+            disabled={busyKey !== null}
             onClick={() => void runAction("/api/retry-failed", "retry")}
             type="button"
           >
-            {actionLoading === "retry" ? "Retrying..." : "Retry Failed"}
+            {busyKey === "retry" ? "Retrying..." : "Retry Failed"}
           </button>
           <button
             className="button button-secondary"
-            disabled={actionLoading !== null}
+            disabled={busyKey !== null}
             onClick={() => void runAction("/api/auth/logout", "logout")}
             type="button"
           >
-            {actionLoading === "logout" ? "Logging out..." : "Logout"}
+            {busyKey === "logout" ? "Logging out..." : "Logout"}
           </button>
         </div>
       </div>
@@ -322,14 +394,92 @@ export function DashboardClient() {
         </article>
       </section>
 
+      <section className="analytics-grid">
+        <article className="panel-card glass">
+          <h3 style={{ marginTop: 0 }}>Sent by channel</h3>
+          <div className="mini-stats">
+            {data?.analytics.sentByChannel.map((item) => (
+              <div className="mini-stat" key={item.key}>
+                <span className="mini-stat-label">{item.label}</span>
+                <strong className="mini-stat-value">{item.count}</strong>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="panel-card glass">
+          <h3 style={{ marginTop: 0 }}>Sent by city</h3>
+          <div className="analytics-list">
+            {data?.analytics.sentByCity.length ? (
+              data.analytics.sentByCity.map((item) => (
+                <div className="analytics-row" key={item.city}>
+                  <span>{item.city}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="helper-text">No sent outreach yet.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="panel-card glass">
+          <h3 style={{ marginTop: 0 }}>Sent by hour</h3>
+          <div className="analytics-list">
+            {data?.analytics.sentByHour.length ? (
+              data.analytics.sentByHour.map((item) => (
+                <div className="analytics-row" key={item.hour}>
+                  <span>{item.hour}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="helper-text">No hourly data yet.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="panel-card glass">
+          <h3 style={{ marginTop: 0 }}>Sent by day</h3>
+          <div className="analytics-list">
+            {data?.analytics.sentByDay.length ? (
+              data.analytics.sentByDay.map((item) => (
+                <div className="analytics-row" key={item.day}>
+                  <span>{item.day}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="helper-text">No daily data yet.</p>
+            )}
+          </div>
+        </article>
+
+        <article className="panel-card glass">
+          <h3 style={{ marginTop: 0 }}>Sent by week</h3>
+          <div className="analytics-list">
+            {data?.analytics.sentByWeek.length ? (
+              data.analytics.sentByWeek.map((item) => (
+                <div className="analytics-row" key={item.week}>
+                  <span>{item.week}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))
+            ) : (
+              <p className="helper-text">No weekly data yet.</p>
+            )}
+          </div>
+        </article>
+      </section>
+
       <section className="panel-grid">
         <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Add avocat</h3>
+          <h3 style={{ marginTop: 0 }}>{editingId ? "Update avocat" : "Add avocat"}</h3>
           <p className="helper-text">
-            Create one lawyer contact manually, then use JSON import for bulk additions.
+            Manage one contact at a time here, or use JSON import/export for bulk operations.
           </p>
 
-          <form className="form-grid" onSubmit={handleAddAvocat} style={{ marginTop: 18 }}>
+          <form className="form-grid" onSubmit={handleSubmit} style={{ marginTop: 18 }}>
             <div className="full-span">
               <label className="label" htmlFor="full_name">
                 Full name
@@ -344,7 +494,7 @@ export function DashboardClient() {
               />
             </div>
 
-            <div className="full-span">
+            <div>
               <label className="label" htmlFor="email">
                 Email
               </label>
@@ -353,7 +503,6 @@ export function DashboardClient() {
                 className="input"
                 name="email"
                 onChange={onFormChange}
-                required
                 type="email"
                 value={form.email}
               />
@@ -398,7 +547,7 @@ export function DashboardClient() {
               />
             </div>
 
-            <div>
+            <div className="full-span">
               <label className="label" htmlFor="preferred_contact_method">
                 Preferred contact
               </label>
@@ -416,13 +565,18 @@ export function DashboardClient() {
             </div>
 
             <div className="full-span action-row" style={{ marginTop: 8 }}>
-              <button
-                className="button button-primary"
-                disabled={actionLoading !== null}
-                type="submit"
-              >
-                {actionLoading === "add" ? "Adding..." : "Add avocat"}
+              <button className="button button-primary" disabled={busyKey !== null} type="submit">
+                {busyKey === "add-avocat" || busyKey === "save-avocat"
+                  ? "Saving..."
+                  : editingId
+                    ? "Update avocat"
+                    : "Add avocat"}
               </button>
+              {editingId ? (
+                <button className="button button-secondary" onClick={resetForm} type="button">
+                  Cancel edit
+                </button>
+              ) : null}
             </div>
           </form>
         </article>
@@ -430,68 +584,169 @@ export function DashboardClient() {
         <article className="panel-card glass">
           <h3 style={{ marginTop: 0 }}>Import / export JSON</h3>
           <p className="helper-text">
-            Import an array of avocat objects or export the current avocat list as JSON.
-          </p>
-          <p className="helper-text">
-            JSON fields: full_name, email, phone, city, firm_name, preferred_contact_method.
+            Import Apify raw JSON or export the current avocat list.
           </p>
 
           <div className="action-row" style={{ marginTop: 18 }}>
             <label className="button button-secondary" htmlFor="avocat-import">
-              {actionLoading === "import" ? "Importing..." : "Import JSON"}
+              {busyKey === "import" ? "Importing..." : "Import JSON"}
             </label>
             <input
               id="avocat-import"
               accept=".json,application/json"
               className="file-input"
-              disabled={actionLoading !== null}
+              disabled={busyKey !== null}
               onChange={handleImport}
               style={{ display: "none" }}
               type="file"
             />
             <button
               className="button button-secondary"
-              disabled={actionLoading !== null}
+              disabled={busyKey !== null}
               onClick={() => void handleExport()}
               type="button"
             >
-              {actionLoading === "export" ? "Exporting..." : "Export JSON"}
+              {busyKey === "export" ? "Exporting..." : "Export JSON"}
             </button>
           </div>
 
-          <div className="table-wrap" style={{ marginTop: 18 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Full name</th>
-                  <th>Email</th>
-                  <th>City</th>
-                  <th>Firm</th>
-                  <th>Contact</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data?.avocats.length ? (
-                  data.avocats.map((avocat) => (
-                    <tr key={avocat.id}>
-                      <td>{avocat.fullName}</td>
-                      <td>{avocat.email}</td>
-                      <td>{avocat.city || "-"}</td>
-                      <td>{avocat.firmName || "-"}</td>
-                      <td>{avocat.preferredContactMethod}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={5} style={{ color: "var(--muted)" }}>
-                      No avocats available yet.
+          <p className="helper-text" style={{ marginTop: 16 }}>
+            Use the searchable table below to update, delete, or send outreach for a specific
+            avocat.
+          </p>
+        </article>
+      </section>
+
+      <section className="table-card glass">
+        <div style={{ padding: 18 }}>
+          <div className="toolbar">
+            <div>
+              <h3 style={{ margin: 0 }}>Avocats</h3>
+              <p className="helper-text">{data?.pagination.totalItems ?? 0} contact(s) found.</p>
+            </div>
+
+            <form
+              className="search-row"
+              onSubmit={(event) => {
+                event.preventDefault();
+                updateParams({ search: searchInput, page: 1 });
+              }}
+            >
+              <input
+                className="input"
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Search by name, city, phone, email, firm..."
+                value={searchInput}
+              />
+              <button className="button button-secondary" type="submit">
+                Search
+              </button>
+              <button
+                className="button button-secondary"
+                onClick={() => {
+                  setSearchInput("");
+                  updateParams({ search: "", page: 1 });
+                }}
+                type="button"
+              >
+                Clear
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Full name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>City</th>
+                <th>Firm</th>
+                <th>Contact</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data?.avocats.length ? (
+                data.avocats.map((avocat) => (
+                  <tr key={avocat.id}>
+                    <td>{avocat.fullName}</td>
+                    <td>{avocat.email || "-"}</td>
+                    <td>{avocat.phone || "-"}</td>
+                    <td>{avocat.city || "-"}</td>
+                    <td>{avocat.firmName || "-"}</td>
+                    <td>{avocat.preferredContactMethod}</td>
+                    <td>
+                      <div className="row-actions">
+                        <button
+                          className="button button-secondary"
+                          onClick={() => startEdit(avocat)}
+                          type="button"
+                        >
+                          Update
+                        </button>
+                        <button
+                          className="button button-primary"
+                          disabled={busyKey !== null}
+                          onClick={() =>
+                            void runAction(`/api/avocats/${avocat.id}/send`, `send-${avocat.id}`)
+                          }
+                          type="button"
+                        >
+                          {busyKey === `send-${avocat.id}` ? "Sending..." : "Send"}
+                        </button>
+                        <button
+                          className="button button-danger"
+                          disabled={busyKey !== null}
+                          onClick={() =>
+                            void runAction(`/api/avocats/${avocat.id}`, `delete-${avocat.id}`, {
+                              method: "DELETE"
+                            })
+                          }
+                          type="button"
+                        >
+                          {busyKey === `delete-${avocat.id}` ? "Deleting..." : "Delete"}
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                )}
-              </tbody>
-            </table>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                    {loading ? "Loading..." : "No avocats available for this search."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pager">
+          <span className="helper-text">
+            Page {data?.pagination.page ?? 1} of {data?.pagination.totalPages ?? 1}
+          </span>
+          <div className="action-row">
+            <button
+              className="button button-secondary"
+              disabled={!data || data.pagination.page <= 1}
+              onClick={() => updateParams({ page: (data?.pagination.page || 1) - 1 })}
+              type="button"
+            >
+              Previous
+            </button>
+            <button
+              className="button button-secondary"
+              disabled={!data || data.pagination.page >= data.pagination.totalPages}
+              onClick={() => updateParams({ page: (data?.pagination.page || 1) + 1 })}
+              type="button"
+            >
+              Next
+            </button>
           </div>
-        </article>
+        </div>
       </section>
 
       <section className="table-card glass">
@@ -509,7 +764,7 @@ export function DashboardClient() {
               <select
                 id="status-filter"
                 className="select"
-                onChange={(event) => updateFilter(event.target.value)}
+                onChange={(event) => updateParams({ status: event.target.value, page: 1 })}
                 value={currentStatus}
               >
                 <option value="all">All</option>
@@ -526,7 +781,8 @@ export function DashboardClient() {
             <thead>
               <tr>
                 <th>Lawyer name</th>
-                <th>Email</th>
+                <th>Contact</th>
+                <th>City</th>
                 <th>Campaign</th>
                 <th>Status</th>
                 <th>Attempts</th>
@@ -540,6 +796,7 @@ export function DashboardClient() {
                   <tr key={log.id}>
                     <td>{log.lawyerName}</td>
                     <td>{log.email}</td>
+                    <td>{log.city}</td>
                     <td>{log.campaignName}</td>
                     <td>
                       <span className={`badge badge-${log.status}`}>{log.status}</span>
@@ -551,7 +808,7 @@ export function DashboardClient() {
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} style={{ color: "var(--muted)" }}>
+                  <td colSpan={8} style={{ color: "var(--muted)" }}>
                     {loading ? "Loading..." : "No outreach logs available for this filter."}
                   </td>
                 </tr>

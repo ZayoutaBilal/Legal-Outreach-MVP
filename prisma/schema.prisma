@@ -22,7 +22,7 @@ enum OutreachStatus {
 model Avocat {
   id                       String        @id @default(uuid()) @db.VarChar(191)
   full_name                String        @db.VarChar(191)
-  email                    String        @unique @db.VarChar(191)
+  email                    String?       @unique @db.VarChar(191)
   phone                    String?       @db.VarChar(50)
   city                     String?       @db.VarChar(191)
   firm_name                String?       @db.VarChar(191)
@@ -30,6 +30,7 @@ model Avocat {
   outreach_logs            OutreachLog[]
 
   @@index([city])
+  @@index([phone])
 }
 
 model OutreachCampaign {
