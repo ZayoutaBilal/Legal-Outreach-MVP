@@ -1,8 +1,5 @@
 {
-  "crons": [
-    {
-      "path": "/api/send",
-      "schedule": "0 9 * * *"
-    }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/" }
   ]
 }
