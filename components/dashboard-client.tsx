@@ -2,6 +2,7 @@
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, LineChart, Line, ResponsiveContainer } from "recharts";
 
 type DashboardPayload = {
   metrics: {
@@ -224,7 +225,7 @@ export function DashboardClient() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    let success = false;
+    let success: boolean;
 
     if (editingId) {
       success = await runAction(`/api/avocats/${editingId}`, "save-avocat", {
@@ -326,20 +327,13 @@ export function DashboardClient() {
   }
 
   return (
-    <>
-      <div className="dashboard-header">
-        <div>
-          <span className="hero-note">Suivi des campagnes email pour cabinets d'avocats</span>
-          <h1 className="page-title" style={{ marginTop: 18 }}>
-            Outreach dashboard
-          </h1>
-          <p className="page-subtitle">
-            Search contacts, manage individual outreach, and monitor delivery performance by
-            channel, city, hour, day, and week.
-          </p>
+    <div className="dashboard-layout">
+      <header className="dashboard-nav">
+        <div className="nav-brand">
+          <h1 className="page-title">Outreach Dashboard 2026</h1>
+          <span className="hero-note">AI-Powered Campaign Management</span>
         </div>
-
-        <div className="action-row">
+        <div className="nav-actions">
           <button
             className="button button-secondary"
             disabled={loading}
@@ -373,452 +367,475 @@ export function DashboardClient() {
             {busyKey === "logout" ? "Logging out..." : "Logout"}
           </button>
         </div>
-      </div>
+      </header>
 
-      <section className="metrics-grid">
-        <article className="metric-card glass">
-          <p className="metric-label">Total contacts</p>
-          <h2 className="metric-value">{data?.metrics.totalContacts ?? "-"}</h2>
-        </article>
-        <article className="metric-card glass">
-          <p className="metric-label">Sent</p>
-          <h2 className="metric-value">{data?.metrics.sentCount ?? "-"}</h2>
-        </article>
-        <article className="metric-card glass">
-          <p className="metric-label">Pending</p>
-          <h2 className="metric-value">{data?.metrics.pendingCount ?? "-"}</h2>
-        </article>
-        <article className="metric-card glass">
-          <p className="metric-label">Failed</p>
-          <h2 className="metric-value">{data?.metrics.failedCount ?? "-"}</h2>
-        </article>
-      </section>
+      <main className="dashboard-main">
+        <section className="metrics-section">
+          <h2 className="section-title">Key Metrics</h2>
+          <div className="metrics-grid">
+            <article className="metric-card glass">
+              <p className="metric-label">Total contacts</p>
+              <h2 className="metric-value">{data?.metrics.totalContacts ?? "-"}</h2>
+            </article>
+            <article className="metric-card glass">
+              <p className="metric-label">Sent</p>
+              <h2 className="metric-value">{data?.metrics.sentCount ?? "-"}</h2>
+            </article>
+            <article className="metric-card glass">
+              <p className="metric-label">Pending</p>
+              <h2 className="metric-value">{data?.metrics.pendingCount ?? "-"}</h2>
+            </article>
+            <article className="metric-card glass">
+              <p className="metric-label">Failed</p>
+              <h2 className="metric-value">{data?.metrics.failedCount ?? "-"}</h2>
+            </article>
+          </div>
+        </section>
 
-      <section className="analytics-grid">
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Sent by channel</h3>
-          <div className="mini-stats">
-            {data?.analytics.sentByChannel.map((item) => (
-              <div className="mini-stat" key={item.key}>
-                <span className="mini-stat-label">{item.label}</span>
-                <strong className="mini-stat-value">{item.count}</strong>
+        <section className="analytics-section">
+          <h2 className="section-title">Analytics</h2>
+          <div className="charts-grid">
+            <article className="chart-card glass">
+              <h3>Sent by Channel</h3>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={data?.analytics.sentByChannel || []}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="count"
+                    >
+                      {data?.analytics.sentByChannel.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={['#007bff', '#28a745', '#ffc107'][index % 3]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
-            ))}
-          </div>
-        </article>
+            </article>
 
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Sent by city</h3>
-          <div className="analytics-list">
-            {data?.analytics.sentByCity.length ? (
-              data.analytics.sentByCity.map((item) => (
-                <div className="analytics-row" key={item.city}>
-                  <span>{item.city}</span>
-                  <strong>{item.count}</strong>
+            <article className="chart-card glass">
+              <h3>Sent by Hour</h3>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={data?.analytics.sentByHour || []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="hour" stroke="var(--muted)" />
+                    <YAxis stroke="var(--muted)" />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)' }} />
+                    <Line type="monotone" dataKey="count" stroke="#007bff" strokeWidth={2} dot={{ fill: '#007bff' }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+
+            <article className="chart-card glass">
+              <h3>Sent by Day</h3>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={data?.analytics.sentByDay || []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="day" stroke="var(--muted)" />
+                    <YAxis stroke="var(--muted)" />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)' }} />
+                    <Bar dataKey="count" fill="#007bff" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+
+            <article className="chart-card glass">
+              <h3>Sent by Week</h3>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={data?.analytics.sentByWeek || []}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="week" stroke="var(--muted)" />
+                    <YAxis stroke="var(--muted)" />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)' }} />
+                    <Bar dataKey="count" fill="#28a745" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+
+            <article className="chart-card glass">
+              <h3>Sent by City</h3>
+              <div className="chart-container">
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={data?.analytics.sentByCity || []} layout="horizontal">
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis type="number" stroke="var(--muted)" />
+                    <YAxis dataKey="city" type="category" stroke="var(--muted)" width={80} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated', border: '1px solid var(--border)' }} />
+                    <Bar dataKey="count" fill="#ffc107" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section className="management-section">
+          <h2 className="section-title">Contact Management</h2>
+          <div className="panel-grid">
+            <article className="panel-card glass">
+              <h3>{editingId ? "Update avocat" : "Add avocat"}</h3>
+              <p className="helper-text">
+                Manage one contact at a time here, or use JSON import/export for bulk operations.
+              </p>
+
+              <form className="form-grid" onSubmit={handleSubmit} style={{ marginTop: 18 }}>
+                <div className="full-span">
+                  <label className="label" htmlFor="full_name">
+                    Full name
+                  </label>
+                  <input
+                    id="full_name"
+                    className="input"
+                    name="full_name"
+                    onChange={onFormChange}
+                    required
+                    value={form.full_name}
+                  />
                 </div>
-              ))
-            ) : (
-              <p className="helper-text">No sent outreach yet.</p>
-            )}
-          </div>
-        </article>
 
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Sent by hour</h3>
-          <div className="analytics-list">
-            {data?.analytics.sentByHour.length ? (
-              data.analytics.sentByHour.map((item) => (
-                <div className="analytics-row" key={item.hour}>
-                  <span>{item.hour}</span>
-                  <strong>{item.count}</strong>
+                <div>
+                  <label className="label" htmlFor="email">
+                    Email
+                  </label>
+                  <input
+                    id="email"
+                    className="input"
+                    name="email"
+                    onChange={onFormChange}
+                    type="email"
+                    value={form.email}
+                  />
                 </div>
-              ))
-            ) : (
-              <p className="helper-text">No hourly data yet.</p>
-            )}
-          </div>
-        </article>
 
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Sent by day</h3>
-          <div className="analytics-list">
-            {data?.analytics.sentByDay.length ? (
-              data.analytics.sentByDay.map((item) => (
-                <div className="analytics-row" key={item.day}>
-                  <span>{item.day}</span>
-                  <strong>{item.count}</strong>
+                <div>
+                  <label className="label" htmlFor="phone">
+                    Phone
+                  </label>
+                  <input
+                    id="phone"
+                    className="input"
+                    name="phone"
+                    onChange={onFormChange}
+                    value={form.phone}
+                  />
                 </div>
-              ))
-            ) : (
-              <p className="helper-text">No daily data yet.</p>
-            )}
-          </div>
-        </article>
 
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Sent by week</h3>
-          <div className="analytics-list">
-            {data?.analytics.sentByWeek.length ? (
-              data.analytics.sentByWeek.map((item) => (
-                <div className="analytics-row" key={item.week}>
-                  <span>{item.week}</span>
-                  <strong>{item.count}</strong>
+                <div>
+                  <label className="label" htmlFor="city">
+                    City
+                  </label>
+                  <input
+                    id="city"
+                    className="input"
+                    name="city"
+                    onChange={onFormChange}
+                    value={form.city}
+                  />
                 </div>
-              ))
-            ) : (
-              <p className="helper-text">No weekly data yet.</p>
-            )}
-          </div>
-        </article>
-      </section>
 
-      <section className="panel-grid">
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>{editingId ? "Update avocat" : "Add avocat"}</h3>
-          <p className="helper-text">
-            Manage one contact at a time here, or use JSON import/export for bulk operations.
-          </p>
+                <div>
+                  <label className="label" htmlFor="firm_name">
+                    Firm name
+                  </label>
+                  <input
+                    id="firm_name"
+                    className="input"
+                    name="firm_name"
+                    onChange={onFormChange}
+                    value={form.firm_name}
+                  />
+                </div>
 
-          <form className="form-grid" onSubmit={handleSubmit} style={{ marginTop: 18 }}>
-            <div className="full-span">
-              <label className="label" htmlFor="full_name">
-                Full name
-              </label>
-              <input
-                id="full_name"
-                className="input"
-                name="full_name"
-                onChange={onFormChange}
-                required
-                value={form.full_name}
-              />
-            </div>
+                <div className="full-span">
+                  <label className="label" htmlFor="preferred_contact_method">
+                    Preferred contact
+                  </label>
+                  <select
+                    id="preferred_contact_method"
+                    className="select"
+                    name="preferred_contact_method"
+                    onChange={onFormChange}
+                    value={form.preferred_contact_method}
+                  >
+                    <option value="email">email</option>
+                    <option value="whatsapp">whatsapp</option>
+                    <option value="both">both</option>
+                  </select>
+                </div>
 
-            <div>
-              <label className="label" htmlFor="email">
-                Email
-              </label>
-              <input
-                id="email"
-                className="input"
-                name="email"
-                onChange={onFormChange}
-                type="email"
-                value={form.email}
-              />
-            </div>
+                <div className="full-span action-row" style={{ marginTop: 8 }}>
+                  <button className="button button-primary" disabled={busyKey !== null} type="submit">
+                    {busyKey === "add-avocat" || busyKey === "save-avocat"
+                      ? "Saving..."
+                      : editingId
+                        ? "Update avocat"
+                        : "Add avocat"}
+                  </button>
+                  {editingId ? (
+                    <button className="button button-secondary" onClick={resetForm} type="button">
+                      Cancel edit
+                    </button>
+                  ) : null}
+                </div>
+              </form>
+            </article>
 
-            <div>
-              <label className="label" htmlFor="phone">
-                Phone
-              </label>
-              <input
-                id="phone"
-                className="input"
-                name="phone"
-                onChange={onFormChange}
-                value={form.phone}
-              />
-            </div>
+            <article className="panel-card glass">
+              <h3>Import / export JSON</h3>
+              <p className="helper-text">
+                Import Apify raw JSON or export the current avocat list.
+              </p>
 
-            <div>
-              <label className="label" htmlFor="city">
-                City
-              </label>
-              <input
-                id="city"
-                className="input"
-                name="city"
-                onChange={onFormChange}
-                value={form.city}
-              />
-            </div>
-
-            <div>
-              <label className="label" htmlFor="firm_name">
-                Firm name
-              </label>
-              <input
-                id="firm_name"
-                className="input"
-                name="firm_name"
-                onChange={onFormChange}
-                value={form.firm_name}
-              />
-            </div>
-
-            <div className="full-span">
-              <label className="label" htmlFor="preferred_contact_method">
-                Preferred contact
-              </label>
-              <select
-                id="preferred_contact_method"
-                className="select"
-                name="preferred_contact_method"
-                onChange={onFormChange}
-                value={form.preferred_contact_method}
-              >
-                <option value="email">email</option>
-                <option value="whatsapp">whatsapp</option>
-                <option value="both">both</option>
-              </select>
-            </div>
-
-            <div className="full-span action-row" style={{ marginTop: 8 }}>
-              <button className="button button-primary" disabled={busyKey !== null} type="submit">
-                {busyKey === "add-avocat" || busyKey === "save-avocat"
-                  ? "Saving..."
-                  : editingId
-                    ? "Update avocat"
-                    : "Add avocat"}
-              </button>
-              {editingId ? (
-                <button className="button button-secondary" onClick={resetForm} type="button">
-                  Cancel edit
+              <div className="action-row" style={{ marginTop: 18 }}>
+                <label className="button button-secondary" htmlFor="avocat-import">
+                  {busyKey === "import" ? "Importing..." : "Import JSON"}
+                </label>
+                <input
+                  id="avocat-import"
+                  accept=".json,application/json"
+                  className="file-input"
+                  disabled={busyKey !== null}
+                  onChange={handleImport}
+                  style={{ display: "none" }}
+                  type="file"
+                />
+                <button
+                  className="button button-secondary"
+                  disabled={busyKey !== null}
+                  onClick={() => void handleExport()}
+                  type="button"
+                >
+                  {busyKey === "export" ? "Exporting..." : "Export JSON"}
                 </button>
-              ) : null}
-            </div>
-          </form>
-        </article>
+              </div>
 
-        <article className="panel-card glass">
-          <h3 style={{ marginTop: 0 }}>Import / export JSON</h3>
-          <p className="helper-text">
-            Import Apify raw JSON or export the current avocat list.
-          </p>
-
-          <div className="action-row" style={{ marginTop: 18 }}>
-            <label className="button button-secondary" htmlFor="avocat-import">
-              {busyKey === "import" ? "Importing..." : "Import JSON"}
-            </label>
-            <input
-              id="avocat-import"
-              accept=".json,application/json"
-              className="file-input"
-              disabled={busyKey !== null}
-              onChange={handleImport}
-              style={{ display: "none" }}
-              type="file"
-            />
-            <button
-              className="button button-secondary"
-              disabled={busyKey !== null}
-              onClick={() => void handleExport()}
-              type="button"
-            >
-              {busyKey === "export" ? "Exporting..." : "Export JSON"}
-            </button>
+              <p className="helper-text" style={{ marginTop: 16 }}>
+                Use the searchable table below to update, delete, or send outreach for a specific
+                avocat.
+              </p>
+            </article>
           </div>
+        </section>
 
-          <p className="helper-text" style={{ marginTop: 16 }}>
-            Use the searchable table below to update, delete, or send outreach for a specific
-            avocat.
-          </p>
-        </article>
-      </section>
+        <section className="contacts-section">
+          <div className="table-card glass">
+            <div style={{ padding: 18 }}>
+              <div className="toolbar">
+                <div>
+                  <h3>Avocats</h3>
+                  <p className="helper-text">{data?.pagination.totalItems ?? 0} contact(s) found.</p>
+                </div>
 
-      <section className="table-card glass">
-        <div style={{ padding: 18 }}>
-          <div className="toolbar">
-            <div>
-              <h3 style={{ margin: 0 }}>Avocats</h3>
-              <p className="helper-text">{data?.pagination.totalItems ?? 0} contact(s) found.</p>
+                <form
+                  className="search-row"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    updateParams({ search: searchInput, page: 1 });
+                  }}
+                >
+                  <input
+                    className="input"
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Search by name, city, phone, email, firm..."
+                    value={searchInput}
+                  />
+                  <button className="button button-secondary" type="submit">
+                    Search
+                  </button>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => {
+                      setSearchInput("");
+                      updateParams({ search: "", page: 1 });
+                    }}
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                </form>
+              </div>
             </div>
 
-            <form
-              className="search-row"
-              onSubmit={(event) => {
-                event.preventDefault();
-                updateParams({ search: searchInput, page: 1 });
-              }}
-            >
-              <input
-                className="input"
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Search by name, city, phone, email, firm..."
-                value={searchInput}
-              />
-              <button className="button button-secondary" type="submit">
-                Search
-              </button>
-              <button
-                className="button button-secondary"
-                onClick={() => {
-                  setSearchInput("");
-                  updateParams({ search: "", page: 1 });
-                }}
-                type="button"
-              >
-                Clear
-              </button>
-            </form>
-          </div>
-        </div>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Full name</th>
-                <th>Email</th>
-                <th>Phone</th>
-                <th>City</th>
-                <th>Firm</th>
-                <th>Contact</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.avocats.length ? (
-                data.avocats.map((avocat) => (
-                  <tr key={avocat.id}>
-                    <td>{avocat.fullName}</td>
-                    <td>{avocat.email || "-"}</td>
-                    <td>{avocat.phone || "-"}</td>
-                    <td>{avocat.city || "-"}</td>
-                    <td>{avocat.firmName || "-"}</td>
-                    <td>{avocat.preferredContactMethod}</td>
-                    <td>
-                      <div className="row-actions">
-                        <button
-                          className="button button-secondary"
-                          onClick={() => startEdit(avocat)}
-                          type="button"
-                        >
-                          Update
-                        </button>
-                        <button
-                          className="button button-primary"
-                          disabled={busyKey !== null}
-                          onClick={() =>
-                            void runAction(`/api/avocats/${avocat.id}/send`, `send-${avocat.id}`)
-                          }
-                          type="button"
-                        >
-                          {busyKey === `send-${avocat.id}` ? "Sending..." : "Send"}
-                        </button>
-                        <button
-                          className="button button-danger"
-                          disabled={busyKey !== null}
-                          onClick={() =>
-                            void runAction(`/api/avocats/${avocat.id}`, `delete-${avocat.id}`, {
-                              method: "DELETE"
-                            })
-                          }
-                          type="button"
-                        >
-                          {busyKey === `delete-${avocat.id}` ? "Deleting..." : "Delete"}
-                        </button>
-                      </div>
-                    </td>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Full name</th>
+                    <th>Email</th>
+                    <th>Phone</th>
+                    <th>City</th>
+                    <th>Firm</th>
+                    <th>Contact</th>
+                    <th>Actions</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} style={{ color: "var(--muted)" }}>
-                    {loading ? "Loading..." : "No avocats available for this search."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="pager">
-          <span className="helper-text">
-            Page {data?.pagination.page ?? 1} of {data?.pagination.totalPages ?? 1}
-          </span>
-          <div className="action-row">
-            <button
-              className="button button-secondary"
-              disabled={!data || data.pagination.page <= 1}
-              onClick={() => updateParams({ page: (data?.pagination.page || 1) - 1 })}
-              type="button"
-            >
-              Previous
-            </button>
-            <button
-              className="button button-secondary"
-              disabled={!data || data.pagination.page >= data.pagination.totalPages}
-              onClick={() => updateParams({ page: (data?.pagination.page || 1) + 1 })}
-              type="button"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="table-card glass">
-        <div style={{ padding: 18 }}>
-          <div className="toolbar">
-            <div>
-              <h3 style={{ margin: 0 }}>Delivery logs</h3>
-              <p className="helper-text">Filter the status and monitor the latest outreach runs.</p>
+                </thead>
+                <tbody>
+                  {data?.avocats.length ?
+                    data.avocats.map((avocat) => (
+                      <tr key={avocat.id}>
+                        <td>{avocat.fullName}</td>
+                        <td>{avocat.email || "-"}</td>
+                        <td>{avocat.phone || "-"}</td>
+                        <td>{avocat.city || "-"}</td>
+                        <td>{avocat.firmName || "-"}</td>
+                        <td>{avocat.preferredContactMethod}</td>
+                        <td>
+                          <div className="row-actions">
+                            <button
+                              className="button button-secondary"
+                              onClick={() => startEdit(avocat)}
+                              type="button"
+                            >
+                              Update
+                            </button>
+                            <button
+                              className="button button-primary"
+                              disabled={busyKey !== null}
+                              onClick={() =>
+                                void runAction(`/api/avocats/${avocat.id}/send`, `send-${avocat.id}`)
+                              }
+                              type="button"
+                            >
+                              {busyKey === `send-${avocat.id}` ? "Sending..." : "Send"}
+                            </button>
+                            <button
+                              className="button button-danger"
+                              disabled={busyKey !== null}
+                              onClick={() =>
+                                void runAction(`/api/avocats/${avocat.id}`, `delete-${avocat.id}`, {
+                                  method: "DELETE"
+                                })
+                              }
+                              type="button"
+                            >
+                              {busyKey === `delete-${avocat.id}` ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  : (
+                    <tr>
+                      <td colSpan={7} style={{ color: "var(--muted)" }}>
+                        {loading ? "Loading..." : "No avocats available for this search."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ minWidth: 220 }}>
-              <label className="label" htmlFor="status-filter">
-                Filter by status
-              </label>
-              <select
-                id="status-filter"
-                className="select"
-                onChange={(event) => updateParams({ status: event.target.value, page: 1 })}
-                value={currentStatus}
-              >
-                <option value="all">All</option>
-                <option value="pending">Pending</option>
-                <option value="sent">Sent</option>
-                <option value="failed">Failed</option>
-              </select>
+            <div className="pager">
+              <span className="helper-text">
+                Page {data?.pagination.page ?? 1} of {data?.pagination.totalPages ?? 1}
+              </span>
+              <div className="action-row">
+                <button
+                  className="button button-secondary"
+                  disabled={!data || data.pagination.page <= 1}
+                  onClick={() => updateParams({ page: (data?.pagination.page || 1) - 1 })}
+                  type="button"
+                >
+                  Previous
+                </button>
+                <button
+                  className="button button-secondary"
+                  disabled={!data || data.pagination.page >= data.pagination.totalPages}
+                  onClick={() => updateParams({ page: (data?.pagination.page || 1) + 1 })}
+                  type="button"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Lawyer name</th>
-                <th>Contact</th>
-                <th>City</th>
-                <th>Campaign</th>
-                <th>Status</th>
-                <th>Attempts</th>
-                <th>Last error</th>
-                <th>Sent date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data?.logs.length ? (
-                data.logs.map((log) => (
-                  <tr key={log.id}>
-                    <td>{log.lawyerName}</td>
-                    <td>{log.email}</td>
-                    <td>{log.city}</td>
-                    <td>{log.campaignName}</td>
-                    <td>
-                      <span className={`badge badge-${log.status}`}>{log.status}</span>
-                    </td>
-                    <td>{log.attempts}</td>
-                    <td>{log.lastError || "-"}</td>
-                    <td>{formatDate(log.sentAt)}</td>
+        <section className="logs-section">
+          <div className="table-card glass">
+            <div style={{ padding: 18 }}>
+              <div className="toolbar">
+                <div>
+                  <h3>Delivery logs</h3>
+                  <p className="helper-text">Filter the status and monitor the latest outreach runs.</p>
+                </div>
+
+                <div style={{ minWidth: 220 }}>
+                  <label className="label" htmlFor="status-filter">
+                    Filter by status
+                  </label>
+                  <select
+                    id="status-filter"
+                    className="select"
+                    onChange={(event) => updateParams({ status: event.target.value, page: 1 })}
+                    value={currentStatus}
+                  >
+                    <option value="all">All</option>
+                    <option value="pending">Pending</option>
+                    <option value="sent">Sent</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lawyer name</th>
+                    <th>Contact</th>
+                    <th>City</th>
+                    <th>Campaign</th>
+                    <th>Status</th>
+                    <th>Attempts</th>
+                    <th>Last error</th>
+                    <th>Sent date</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} style={{ color: "var(--muted)" }}>
-                    {loading ? "Loading..." : "No outreach logs available for this filter."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                </thead>
+                <tbody>
+                  {data?.logs.length ? (
+                    data.logs.map((log) => (
+                      <tr key={log.id}>
+                        <td>{log.lawyerName}</td>
+                        <td>{log.email}</td>
+                        <td>{log.city}</td>
+                        <td>{log.campaignName}</td>
+                        <td>
+                          <span className={`badge badge-${log.status}`}>{log.status}</span>
+                        </td>
+                        <td>{log.attempts}</td>
+                        <td>{log.lastError || "-"}</td>
+                        <td>{formatDate(log.sentAt)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={8} style={{ color: "var(--muted)" }}>
+                        {loading ? "Loading..." : "No outreach logs available for this filter."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
 
       {message ? <p className="status-message">{message}</p> : null}
-    </>
+    </div>
   );
 }

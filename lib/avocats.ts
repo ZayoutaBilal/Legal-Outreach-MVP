@@ -102,13 +102,13 @@ async function findDuplicateAvocat(
   data: ReturnType<typeof normalizeAvocatInput>,
   excludeId?: string
 ) {
-  const duplicateConditions: Array<{ phone?: string | null; email?: string | null }> = [];
+  const duplicateConditions: Prisma.AvocatWhereInput[] = [];
 
-  if (data.phone) {
+  if (data.phone !== null && data.phone !== undefined) {
     duplicateConditions.push({ phone: data.phone });
   }
 
-  if (data.email) {
+  if (data.email !== null && data.email !== undefined) {
     duplicateConditions.push({ email: data.email });
   }
 
@@ -139,7 +139,9 @@ export async function createAvocat(input: AvocatInput) {
   }
 
   try {
-    const avocat = await prisma.avocat.create({ data });
+    const avocat = await prisma.avocat.create({
+      data: data as any
+    });
     await attachAvocatToActiveCampaign(avocat.id);
     return avocat;
   } catch (error) {
@@ -160,9 +162,30 @@ export async function updateAvocat(id: string, input: AvocatInput) {
   }
 
   try {
+    const updateData: Prisma.AvocatUpdateInput = {
+      full_name: data.full_name,
+      preferred_contact_method: data.preferred_contact_method
+    };
+
+    if (data.email !== null) {
+      updateData.email = data.email;
+    }
+
+    if (data.phone !== null) {
+      updateData.phone = data.phone;
+    }
+
+    if (data.city !== null) {
+      updateData.city = data.city;
+    }
+
+    if (data.firm_name !== null) {
+      updateData.firm_name = data.firm_name;
+    }
+
     return await prisma.avocat.update({
       where: { id },
-      data
+      data: updateData
     });
   } catch (error) {
     if (isUniqueEmailError(error)) {
