@@ -373,19 +373,19 @@ export function DashboardClient() {
         <section className="metrics-section">
           <h2 className="section-title">Key Metrics</h2>
           <div className="metrics-grid">
-            <article className="metric-card glass">
+            <article className="metric-card">
               <p className="metric-label">Total contacts</p>
               <h2 className="metric-value">{data?.metrics.totalContacts ?? "-"}</h2>
             </article>
-            <article className="metric-card glass">
+            <article className="metric-card">
               <p className="metric-label">Sent</p>
               <h2 className="metric-value">{data?.metrics.sentCount ?? "-"}</h2>
             </article>
-            <article className="metric-card glass">
+            <article className="metric-card">
               <p className="metric-label">Pending</p>
               <h2 className="metric-value">{data?.metrics.pendingCount ?? "-"}</h2>
             </article>
-            <article className="metric-card glass">
+            <article className="metric-card">
               <p className="metric-label">Failed</p>
               <h2 className="metric-value">{data?.metrics.failedCount ?? "-"}</h2>
             </article>
@@ -410,7 +410,7 @@ export function DashboardClient() {
                       dataKey="count"
                     >
                       {data?.analytics.sentByChannel.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={['#007bff', '#28a745', '#ffc107'][index % 3]} />
+                        <Cell key={`cell-${index}`} fill={['#6b4423', '#8b5d3f', '#a87843'][index % 3]} />
                       ))}
                     </Pie>
                     <Tooltip />
@@ -428,7 +428,7 @@ export function DashboardClient() {
                     <XAxis dataKey="hour" stroke="var(--muted)" />
                     <YAxis stroke="var(--muted)" />
                     <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)' }} />
-                    <Line type="monotone" dataKey="count" stroke="#007bff" strokeWidth={2} dot={{ fill: '#007bff' }} />
+                    <Line type="monotone" dataKey="count" stroke="#8b5d3f" strokeWidth={2} dot={{ fill: '#8b5d3f' }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -443,7 +443,7 @@ export function DashboardClient() {
                     <XAxis dataKey="day" stroke="var(--muted)" />
                     <YAxis stroke="var(--muted)" />
                     <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)' }} />
-                    <Bar dataKey="count" fill="#007bff" />
+                    <Bar dataKey="count" fill="#8b5d3f" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -458,7 +458,7 @@ export function DashboardClient() {
                     <XAxis dataKey="week" stroke="var(--muted)" />
                     <YAxis stroke="var(--muted)" />
                     <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated)', border: '1px solid var(--border)' }} />
-                    <Bar dataKey="count" fill="#28a745" />
+                    <Bar dataKey="count" fill="#6b4423" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -473,7 +473,7 @@ export function DashboardClient() {
                     <XAxis type="number" stroke="var(--muted)" />
                     <YAxis dataKey="city" type="category" stroke="var(--muted)" width={80} />
                     <Tooltip contentStyle={{ backgroundColor: 'var(--bg-elevated', border: '1px solid var(--border)' }} />
-                    <Bar dataKey="count" fill="#ffc107" />
+                    <Bar dataKey="count" fill="#a87843" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
