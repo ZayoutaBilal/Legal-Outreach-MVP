@@ -1,0 +1,14 @@
+name: API Cron Job
+on:
+  schedule:
+    - cron: '*/3 * * * *' # Runs every 3 minutes
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  hit-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call API
+        run: |
+          curl -X POST "https://legal-outreach-mvp.vercel.app/api/send" \
+          -H "Authorization: Bearer ${{ secrets.API_TOKEN }}"
