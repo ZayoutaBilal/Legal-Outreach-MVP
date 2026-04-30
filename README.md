@@ -112,7 +112,8 @@ Import behavior:
 3. Add all environment variables from `.env.example` in the Vercel dashboard.
 4. Make sure `DATABASE_URL` points to your TiDB instance.
 5. Deploy.
-6. Configure Vercel cron authentication by sending `Authorization: Bearer <CRON_SECRET>` to `/api/send`.
+6. Configure github cron authentication by sending `Authorization: Bearer <CRON_SECRET>` to `/api/send`.
+[![API Cron Job](https://github.com/ZayoutaBilal/Legal-Outreach-MVP/actions/workflows/cron.yml/badge.svg)](https://github.com/ZayoutaBilal/Legal-Outreach-MVP/actions/workflows/cron.yml)
 
 ## Notes
 
