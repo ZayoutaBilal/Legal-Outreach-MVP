@@ -95,6 +95,19 @@ export function normalizeAvocatInput(input: AvocatInput) {
   };
 }
 
+function toPrismaAvocatData(
+  data: ReturnType<typeof normalizeAvocatInput>
+): Prisma.AvocatCreateInput {
+  return {
+    full_name: data.full_name,
+    preferred_contact_method: data.preferred_contact_method,
+    ...(data.email ? { email: data.email } : {}),
+    ...(data.phone ? { phone: data.phone } : {}),
+    ...(data.city ? { city: data.city } : {}),
+    ...(data.firm_name ? { firm_name: data.firm_name } : {})
+  };
+}
+
 function isUniqueEmailError(error: unknown) {
   return (
     error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -135,15 +148,17 @@ async function findDuplicateAvocat(
 }
 
 export async function createAvocat(input: AvocatInput) {
-  const data = normalizeAvocatInput(input);
-  const existingAvocat = await findDuplicateAvocat(data);
+  const normalizedData = normalizeAvocatInput(input);
+  const existingAvocat = await findDuplicateAvocat(normalizedData);
 
   if (existingAvocat) {
     throw new Error("An avocat with the same phone or email already exists.");
   }
 
   try {
-    const avocat = await prisma.avocat.create({ data });
+    const avocat = await prisma.avocat.create({
+      data: toPrismaAvocatData(normalizedData)
+    });
     await attachAvocatToActiveCampaign(avocat.id);
     return avocat;
   } catch (error) {
@@ -156,8 +171,8 @@ export async function createAvocat(input: AvocatInput) {
 }
 
 export async function updateAvocat(id: string, input: AvocatInput) {
-  const data = normalizeAvocatInput(input);
-  const existingAvocat = await findDuplicateAvocat(data, id);
+  const normalizedData = normalizeAvocatInput(input);
+  const existingAvocat = await findDuplicateAvocat(normalizedData, id);
 
   if (existingAvocat) {
     throw new Error("Another avocat with the same phone or email already exists.");
@@ -166,7 +181,7 @@ export async function updateAvocat(id: string, input: AvocatInput) {
   try {
     return await prisma.avocat.update({
       where: { id },
-      data
+      data: toPrismaAvocatData(normalizedData)
     });
   } catch (error) {
     if (isUniqueEmailError(error)) {
