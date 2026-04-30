@@ -106,7 +106,7 @@ async function findDuplicateAvocat(
   data: ReturnType<typeof normalizeAvocatInput>,
   excludeId?: string
 ) {
-  const duplicateConditions: Array<{ phone?: string | null; email?: string | null }> = [];
+  const duplicateConditions: Prisma.AvocatWhereInput[] = [];
 
   if (data.phone) {
     duplicateConditions.push({ phone: data.phone });
