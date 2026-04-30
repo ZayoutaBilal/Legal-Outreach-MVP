@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getAdminCredentials } from "@/lib/admin-credentials";
 import {
   createSession,
-  getAdminCredentials,
   getSessionCookieName,
   getSessionMaxAge
 } from "@/lib/auth-session";
@@ -10,7 +10,7 @@ import {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { email?: string; password?: string };
-    const { email, password } = getAdminCredentials();
+    const { email, password } = await getAdminCredentials();
 
     if (body.email !== email || body.password !== password) {
       return NextResponse.json({ error: "Invalid credentials." }, { status: 401 });

@@ -1,6 +1,7 @@
 import { PreferredContactMethod, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { attachAvocatToActiveCampaign } from "@/lib/campaigns";
+import { enrichEmailsFromWebsites, getWebsiteKey } from "@/lib/apify";
 
 type AvocatInput = {
   full_name?: unknown;
@@ -16,8 +17,11 @@ type RawApifyAvocat = {
   phone?: unknown;
   city?: unknown;
   website?: unknown;
+  email?: unknown;
   reviewsCount?: unknown;
 };
+
+export type ImportMode = "standard" | "enrich-websites";
 
 const allowedContactMethods = new Set<PreferredContactMethod>([
   PreferredContactMethod.email,
@@ -102,13 +106,13 @@ async function findDuplicateAvocat(
   data: ReturnType<typeof normalizeAvocatInput>,
   excludeId?: string
 ) {
-  const duplicateConditions: Prisma.AvocatWhereInput[] = [];
+  const duplicateConditions: Array<{ phone?: string | null; email?: string | null }> = [];
 
-  if (data.phone !== null && data.phone !== undefined) {
+  if (data.phone) {
     duplicateConditions.push({ phone: data.phone });
   }
 
-  if (data.email !== null && data.email !== undefined) {
+  if (data.email) {
     duplicateConditions.push({ email: data.email });
   }
 
@@ -139,9 +143,7 @@ export async function createAvocat(input: AvocatInput) {
   }
 
   try {
-    const avocat = await prisma.avocat.create({
-      data: data as any
-    });
+    const avocat = await prisma.avocat.create({ data });
     await attachAvocatToActiveCampaign(avocat.id);
     return avocat;
   } catch (error) {
@@ -162,30 +164,9 @@ export async function updateAvocat(id: string, input: AvocatInput) {
   }
 
   try {
-    const updateData: Prisma.AvocatUpdateInput = {
-      full_name: data.full_name,
-      preferred_contact_method: data.preferred_contact_method
-    };
-
-    if (data.email !== null) {
-      updateData.email = data.email;
-    }
-
-    if (data.phone !== null) {
-      updateData.phone = data.phone;
-    }
-
-    if (data.city !== null) {
-      updateData.city = data.city;
-    }
-
-    if (data.firm_name !== null) {
-      updateData.firm_name = data.firm_name;
-    }
-
     return await prisma.avocat.update({
       where: { id },
-      data: updateData
+      data
     });
   } catch (error) {
     if (isUniqueEmailError(error)) {
@@ -202,10 +183,17 @@ export async function deleteAvocat(id: string) {
   });
 }
 
-function mapRawApifyRecord(record: RawApifyAvocat) {
+type PreparedImportRow = {
+  data: ReturnType<typeof normalizeAvocatInput>;
+  website: string | null;
+};
+
+function mapRawApifyRecord(record: RawApifyAvocat): PreparedImportRow | null {
   const title = sanitizeOptionalString(record.title);
   const phone = sanitizeOptionalString(record.phone);
   const city = sanitizeOptionalString(record.city);
+  const website = sanitizeOptionalString(record.website);
+  const rawEmail = sanitizeOptionalString(record.email)?.toLowerCase() || null;
   const reviewsCount =
     typeof record.reviewsCount === "number"
       ? record.reviewsCount
@@ -215,19 +203,67 @@ function mapRawApifyRecord(record: RawApifyAvocat) {
     return null;
   }
 
-  const normalizedPhone = normalizePhone(phone);
-
   return {
-    full_name: extractName(title) || title,
-    email: null,
-    phone: normalizedPhone,
-    city: city ? city.toUpperCase() : null,
-    firm_name: title,
-    preferred_contact_method: PreferredContactMethod.whatsapp
+    data: normalizeAvocatInput({
+      full_name: extractName(title) || title,
+      email: rawEmail,
+      phone,
+      city: city ? city.toUpperCase() : null,
+      firm_name: title,
+      preferred_contact_method: rawEmail ? PreferredContactMethod.email : PreferredContactMethod.whatsapp
+    }),
+    website
   };
 }
 
-export async function importAvocats(payload: unknown) {
+async function prepareImportRows(payload: unknown, importMode: ImportMode) {
+  const mappedRows: Array<{ row: PreparedImportRow | null; index: number }> = [];
+
+  for (let index = 0; index < payload.length; index += 1) {
+    mappedRows.push({
+      row: mapRawApifyRecord(payload[index] as RawApifyAvocat),
+      index
+    });
+  }
+
+  if (importMode !== "enrich-websites") {
+    return mappedRows;
+  }
+
+  const websitesToEnrich = mappedRows
+    .map((entry) => entry.row)
+    .filter((row): row is PreparedImportRow => Boolean(row))
+    .filter((row) => !row.data.email && row.website)
+    .map((row) => row.website as string);
+
+  const enrichedEmailsByWebsite = await enrichEmailsFromWebsites(websitesToEnrich);
+
+  return mappedRows.map((entry) => {
+    if (!entry.row || entry.row.data.email || !entry.row.website) {
+      return entry;
+    }
+
+    const enrichedEmail = enrichedEmailsByWebsite.get(getWebsiteKey(entry.row.website));
+
+    if (!enrichedEmail) {
+      return entry;
+    }
+
+    return {
+      ...entry,
+      row: {
+        ...entry.row,
+        data: {
+          ...entry.row.data,
+          email: enrichedEmail,
+          preferred_contact_method: PreferredContactMethod.email
+        }
+      }
+    };
+  });
+}
+
+export async function importAvocats(payload: unknown, importMode: ImportMode = "standard") {
   if (!Array.isArray(payload)) {
     throw new Error("Import payload must be a JSON array.");
   }
@@ -235,35 +271,32 @@ export async function importAvocats(payload: unknown) {
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
+  const preparedRows = await prepareImportRows(payload, importMode);
 
-  for (let index = 0; index < payload.length; index += 1) {
-    const row = payload[index];
-
+  for (const prepared of preparedRows) {
     try {
-      const mappedRow = mapRawApifyRecord(row as RawApifyAvocat);
-
-      if (!mappedRow) {
+      if (!prepared.row) {
         skipped += 1;
         errors.push(
-          `Row ${index + 1}: skipped because phone is missing, title is empty, or reviewsCount is below 5.`
+          `Row ${prepared.index + 1}: skipped because phone is missing, title is empty, or reviewsCount is below 5.`
         );
         continue;
       }
 
-      const existingAvocat = await findDuplicateAvocat(normalizeAvocatInput(mappedRow));
+      const existingAvocat = await findDuplicateAvocat(prepared.row.data);
 
       if (existingAvocat) {
         skipped += 1;
-        errors.push(`Row ${index + 1}: skipped duplicate phone or email.`);
+        errors.push(`Row ${prepared.index + 1}: skipped duplicate phone or email.`);
         continue;
       }
 
-      await createAvocat(mappedRow);
+      await createAvocat(prepared.row.data);
       created += 1;
     } catch (error) {
       skipped += 1;
       const message = error instanceof Error ? error.message : "Unknown import error.";
-      errors.push(`Row ${index + 1}: ${message}`);
+      errors.push(`Row ${prepared.index + 1}: ${message}`);
     }
   }
 

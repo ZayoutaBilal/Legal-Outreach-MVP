@@ -17,17 +17,6 @@ function getJwtSecret() {
   return new TextEncoder().encode(secret);
 }
 
-export function getAdminCredentials() {
-  const email = process.env.ADMIN_EMAIL;
-  const password = process.env.ADMIN_PASSWORD;
-
-  if (!email || !password) {
-    throw new Error("ADMIN_EMAIL or ADMIN_PASSWORD is missing.");
-  }
-
-  return { email, password };
-}
-
 export async function createSession(email: string) {
   return new SignJWT({ email })
     .setProtectedHeader({ alg: "HS256" })

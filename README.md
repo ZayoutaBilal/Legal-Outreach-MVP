@@ -73,6 +73,8 @@ Import behavior:
 - `firm_name` keeps the original title
 - rows are skipped when `phone` is missing or `reviewsCount < 5`
 - rows are skipped when another avocat already has the same phone or email
+- dashboard import mode `1` keeps the current logic
+- dashboard import mode `2` sends `website` values without email to Apify and saves the returned email when one is found
 
 ## Required environment variables
 
@@ -92,6 +94,8 @@ Import behavior:
 - `TWILIO_SID`: Twilio account SID for WhatsApp sending
 - `TWILIO_AUTH_TOKEN`: Twilio auth token
 - `TWILIO_WHATSAPP_NUMBER`: Twilio WhatsApp sender, usually in `whatsapp:+...` format
+- `APIFY_TOKEN`: Apify API token used for website email enrichment
+- `APIFY_EMAIL_ACTOR_ID`: optional Apify Actor ID for website email extraction, defaults to `9Sk4JJhEma9vBKqrg`
 
 ## Suggested data flow
 
@@ -116,4 +120,6 @@ Import behavior:
 - It prefers the first `pending` outreach log and falls back to the first `failed` log only when no pending log exists.
 - WhatsApp sends require a valid Moroccan mobile number starting with `06` or `07`.
 - Failed outreach logs stop retrying after 3 attempts.
+- Admin login credentials are now stored in the `AppSettings` table and are bootstrapped from `ADMIN_EMAIL` / `ADMIN_PASSWORD` on first run.
+- The dashboard can email the current admin email and password to the configured `SMTP_FROM` inbox as a recovery action.
 - For real production scale, a queue worker is a better fit than long function sleeps, but this implementation follows the MVP requirements exactly.

@@ -55,3 +55,12 @@ model OutreachLog {
   @@index([status, sent_at])
   @@index([campaign_id])
 }
+
+model AppSettings {
+  id             String   @id @default("default") @db.VarChar(191)
+  admin_email    String   @db.VarChar(191)
+  admin_password String   @db.VarChar(191)
+  smtp_from      String?  @db.VarChar(191)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+}

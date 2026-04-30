@@ -9,12 +9,15 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [recovering, setRecovering] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setInfo(null);
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -39,6 +42,30 @@ export function LoginForm() {
       setError(submitError instanceof Error ? submitError.message : "Login failed.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleRecoverPassword() {
+    setRecovering(true);
+    setError(null);
+    setInfo(null);
+
+    try {
+      const response = await fetch("/api/auth/recover-admin", {
+        method: "POST"
+      });
+
+      const data = (await response.json()) as { error?: string; message?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error || "Unable to send recovery email.");
+      }
+
+      setInfo(data.message || "Recovery email sent.");
+    } catch (recoverError) {
+      setError(recoverError instanceof Error ? recoverError.message : "Unable to send recovery email.");
+    } finally {
+      setRecovering(false);
     }
   }
 
@@ -78,7 +105,17 @@ export function LoginForm() {
         {loading ? "Connexion..." : "Se connecter"}
       </button>
 
-      {error ? <p className="status-message" style={{ color: "var(--danger)" }}>{error}</p> : null}
+      <button
+        className="button button-secondary"
+        disabled={recovering || loading}
+        onClick={() => void handleRecoverPassword()}
+        type="button"
+      >
+        {recovering ? "Sending reset..." : "Reset password"}
+      </button>
+
+      {info ? <p className="helper-text" style={{ color: "var(--success)", marginTop: 0 }}>{info}</p> : null}
+      {error ? <p className="helper-text" style={{ color: "var(--danger)", marginTop: 0 }}>{error}</p> : null}
     </form>
   );
 }

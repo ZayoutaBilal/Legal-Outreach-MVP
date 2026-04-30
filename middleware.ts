@@ -6,7 +6,8 @@ const protectedRoutes = [
   "/api/dashboard",
   "/api/send",
   "/api/retry-failed",
-  "/api/avocats"
+  "/api/avocats",
+  "/api/settings"
 ];
 
 function isProtected(pathname: string) {
@@ -46,6 +47,7 @@ export const config = {
     "/api/dashboard/:path*",
     "/api/send/:path*",
     "/api/retry-failed/:path*",
-    "/api/avocats/:path*"
+    "/api/avocats/:path*",
+    "/api/settings/:path*"
   ]
 };

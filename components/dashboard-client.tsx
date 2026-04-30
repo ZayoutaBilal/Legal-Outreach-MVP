@@ -67,6 +67,14 @@ type FormState = {
   preferred_contact_method: "email" | "whatsapp" | "both";
 };
 
+type ImportMode = "standard" | "enrich-websites";
+
+type SettingsState = {
+  email: string;
+  password: string;
+  smtpFrom: string;
+};
+
 const emptyForm: FormState = {
   full_name: "",
   email: "",
@@ -100,6 +108,13 @@ export function DashboardClient() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState(currentSearch);
+  const [importMode, setImportMode] = useState<ImportMode>("standard");
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsForm, setSettingsForm] = useState<SettingsState>({
+    email: "",
+    password: "",
+    smtpFrom: ""
+  });
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -119,16 +134,26 @@ export function DashboardClient() {
         params.set("page", String(currentPage));
       }
 
-      const response = await fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
-        cache: "no-store"
-      });
+      const [dashboardResponse, settingsResponse] = await Promise.all([
+        fetch(`/api/dashboard${params.toString() ? `?${params.toString()}` : ""}`, {
+          cache: "no-store"
+        }),
+        fetch("/api/settings", {
+          cache: "no-store"
+        })
+      ]);
 
-      if (!response.ok) {
+      if (!dashboardResponse.ok) {
         throw new Error("Unable to load dashboard data.");
       }
 
-      const payload = (await response.json()) as DashboardPayload;
+      const payload = (await dashboardResponse.json()) as DashboardPayload;
       setData(payload);
+
+      if (settingsResponse.ok) {
+        const settingsPayload = (await settingsResponse.json()) as SettingsState;
+        setSettingsForm(settingsPayload);
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to load dashboard data.");
     } finally {
@@ -179,6 +204,11 @@ export function DashboardClient() {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
+  function onSettingsChange(event: ChangeEvent<HTMLInputElement>) {
+    const { name, value } = event.target;
+    setSettingsForm((current) => ({ ...current, [name]: value }));
+  }
+
   function resetForm() {
     setForm(emptyForm);
     setEditingId(null);
@@ -225,7 +255,7 @@ export function DashboardClient() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    let success: boolean;
+    let success = false;
 
     if (editingId) {
       success = await runAction(`/api/avocats/${editingId}`, "save-avocat", {
@@ -242,6 +272,18 @@ export function DashboardClient() {
     if (success) {
       resetForm();
     }
+  }
+
+  async function handleSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    await runAction("/api/settings", "save-settings", {
+      method: "PUT",
+      body: {
+        email: settingsForm.email,
+        password: settingsForm.password
+      }
+    });
   }
 
   async function handleImport(event: ChangeEvent<HTMLInputElement>) {
@@ -262,7 +304,10 @@ export function DashboardClient() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({
+          importMode,
+          items: payload
+        })
       });
       const result = (await response.json()) as ApiResult & { error?: string };
 
@@ -331,9 +376,35 @@ export function DashboardClient() {
       <header className="dashboard-nav">
         <div className="nav-brand">
           <h1 className="page-title">Outreach Dashboard 2026</h1>
-          <span className="hero-note">AI-Powered Campaign Management</span>
+          <span className="hero-note">Suivi des campagnes email pour cabinets d'avocats</span>
+          <p className="page-subtitle">
+            Search contacts, manage outreach, monitor delivery performance, and manage admin
+            credentials from one place.
+          </p>
         </div>
+
         <div className="nav-actions">
+          <button
+            aria-label="Open admin settings"
+            className="button button-secondary"
+            disabled={busyKey !== null}
+            onClick={() => setIsSettingsOpen(true)}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+              style={{ marginRight: 8 }}
+            >
+              <path
+                d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.13.55-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.48a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32a.5.5 0 0 0 .6.22l2.39-.96c.5.39 1.05.71 1.63.94l.36 2.54a.5.5 0 0 0 .49.42h3.8a.5.5 0 0 0 .49-.42l.36-2.54c.58-.23 1.13-.55 1.63-.94l2.39.96a.5.5 0 0 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"
+                fill="currentColor"
+              />
+            </svg>
+            Settings
+          </button>
           <button
             className="button button-secondary"
             disabled={loading}
@@ -592,11 +663,28 @@ export function DashboardClient() {
               </form>
             </article>
 
-            <article className="panel-card glass">
+            <article className="panel-card">
               <h3>Import / export JSON</h3>
               <p className="helper-text">
-                Import Apify raw JSON or export the current avocat list.
+                Import Apify raw JSON with direct save mode or website email enrichment mode.
               </p>
+
+              <div style={{ marginTop: 18 }}>
+                <label className="label" htmlFor="import-mode">
+                  Import mode
+                </label>
+                <select
+                  id="import-mode"
+                  className="select"
+                  onChange={(event) => setImportMode(event.target.value as ImportMode)}
+                  value={importMode}
+                >
+                  <option value="standard">1. Import with current logic</option>
+                  <option value="enrich-websites">
+                    2. Import and enrich missing emails from website via Apify
+                  </option>
+                </select>
+              </div>
 
               <div className="action-row" style={{ marginTop: 18 }}>
                 <label className="button button-secondary" htmlFor="avocat-import">
@@ -620,11 +708,6 @@ export function DashboardClient() {
                   {busyKey === "export" ? "Exporting..." : "Export JSON"}
                 </button>
               </div>
-
-              <p className="helper-text" style={{ marginTop: 16 }}>
-                Use the searchable table below to update, delete, or send outreach for a specific
-                avocat.
-              </p>
             </article>
           </div>
         </section>
@@ -682,7 +765,7 @@ export function DashboardClient() {
                   </tr>
                 </thead>
                 <tbody>
-                  {data?.avocats.length ?
+                  {data?.avocats.length ? (
                     data.avocats.map((avocat) => (
                       <tr key={avocat.id}>
                         <td>{avocat.fullName}</td>
@@ -726,7 +809,7 @@ export function DashboardClient() {
                         </td>
                       </tr>
                     ))
-                  : (
+                  ) : (
                     <tr>
                       <td colSpan={7} style={{ color: "var(--muted)" }}>
                         {loading ? "Loading..." : "No avocats available for this search."}
@@ -768,7 +851,7 @@ export function DashboardClient() {
             <div style={{ padding: 18 }}>
               <div className="toolbar">
                 <div>
-                  <h3>Delivery logs</h3>
+                  <h3 style={{ margin: 0 }}>Delivery logs</h3>
                   <p className="helper-text">Filter the status and monitor the latest outreach runs.</p>
                 </div>
 
@@ -834,6 +917,95 @@ export function DashboardClient() {
           </div>
         </section>
       </main>
+
+      {isSettingsOpen ? (
+        <>
+          <div className="modal-backdrop" onClick={() => setIsSettingsOpen(false)} />
+          <div
+            aria-labelledby="admin-settings-title"
+            aria-modal="true"
+            className="modal"
+            role="dialog"
+          >
+            <div className="modal-header">
+              <h2 id="admin-settings-title">Admin settings</h2>
+              <p className="helper-text">
+                Update admin access and send the current credentials to the sender inbox.
+              </p>
+            </div>
+            <div className="modal-body">
+              <form className="form-grid" id="admin-settings-form" onSubmit={handleSettingsSubmit}>
+                <div className="full-span">
+                  <label className="label" htmlFor="settings-email">
+                    Admin email
+                  </label>
+                  <input
+                    id="settings-email"
+                    className="input"
+                    name="email"
+                    onChange={onSettingsChange}
+                    type="email"
+                    value={settingsForm.email}
+                  />
+                </div>
+
+                <div className="full-span">
+                  <label className="label" htmlFor="settings-password">
+                    Admin password
+                  </label>
+                  <input
+                    id="settings-password"
+                    className="input"
+                    name="password"
+                    onChange={onSettingsChange}
+                    type="text"
+                    value={settingsForm.password}
+                  />
+                </div>
+
+                <div className="full-span">
+                  <label className="label" htmlFor="settings-smtp">
+                    Recovery email destination
+                  </label>
+                  <input
+                    id="settings-smtp"
+                    className="input"
+                    name="smtpFrom"
+                    readOnly
+                    value={settingsForm.smtpFrom}
+                  />
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button
+                className="button button-secondary"
+                disabled={busyKey !== null}
+                onClick={() => setIsSettingsOpen(false)}
+                type="button"
+              >
+                Close
+              </button>
+              <button
+                className="button button-secondary"
+                disabled={busyKey !== null}
+                onClick={() => void runAction("/api/settings/recover-admin", "recover-admin")}
+                type="button"
+              >
+                {busyKey === "recover-admin" ? "Sending..." : "Send recovery email"}
+              </button>
+              <button
+                className="button button-primary"
+                disabled={busyKey !== null}
+                form="admin-settings-form"
+                type="submit"
+              >
+                {busyKey === "save-settings" ? "Saving..." : "Save settings"}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {message ? <p className="status-message">{message}</p> : null}
     </div>
