@@ -234,7 +234,7 @@ function mapRawApifyRecord(record: RawApifyAvocat): PreparedImportRow | null {
   };
 }
 
-async function prepareImportRows(payload: unknown, importMode: ImportMode) {
+async function prepareImportRows(payload: unknown[], importMode: ImportMode) {
   const mappedRows: Array<{ row: PreparedImportRow | null; index: number }> = [];
 
   for (let index = 0; index < payload.length; index += 1) {
@@ -289,7 +289,7 @@ export async function importAvocats(payload: unknown, importMode: ImportMode = "
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
-  const preparedRows = await prepareImportRows(payload, importMode);
+  const preparedRows = await prepareImportRows(payload as unknown[], importMode);
 
   for (const prepared of preparedRows) {
     try {
