@@ -38,11 +38,11 @@ export function buildOutreachEmail({ fullName, formLink }: OutreachTemplateInput
 
   return {
     subject: "Courte étude – organisation des cabinets d’avocats",
-    text: `Bonjour Maître ${fullName},
+    text: `Bonjour,
 
 Je suis développeur basé à Tanger et je mène actuellement une courte étude sur les défis administratifs rencontrés par les avocats.
 
-Le questionnaire prend moins de 3 minutes :
+Le questionnaire prend moins de 5 minutes :
 
 👉 ${formLink}
 
@@ -51,9 +51,9 @@ Merci beaucoup pour votre temps.
 Cordialement,
 ${signer}`,
     html: `
-      <p>Bonjour Maître ${fullName},</p>
+      <p>Bonjour,</p>
       <p>Je suis développeur basé à Tanger et je mène actuellement une courte étude sur les défis administratifs rencontrés par les avocats.</p>
-      <p>Le questionnaire prend moins de 3 minutes :</p>
+      <p>Le questionnaire prend moins de 5 minutes :</p>
       <p><a href="${formLink}">👉 ${formLink}</a></p>
       <p>Merci beaucoup pour votre temps.</p>
       <p>Cordialement,<br />${signer}</p>
