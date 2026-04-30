@@ -101,7 +101,7 @@ function toPrismaAvocatData(
   return {
     full_name: data.full_name,
     preferred_contact_method: data.preferred_contact_method,
-    ...(data.email ? { email: data.email } : {}),
+    ...(data.email ? { email: data.email as string } : {}),
     ...(data.phone ? { phone: data.phone } : {}),
     ...(data.city ? { city: data.city } : {}),
     ...(data.firm_name ? { firm_name: data.firm_name } : {})
