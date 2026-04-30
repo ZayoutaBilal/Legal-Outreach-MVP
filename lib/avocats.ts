@@ -98,17 +98,14 @@ export function normalizeAvocatInput(input: AvocatInput) {
 function toPrismaAvocatData(
     data: ReturnType<typeof normalizeAvocatInput>
 ): Prisma.AvocatCreateInput {
-  const result: Prisma.AvocatCreateInput = {
+  return {
     full_name: data.full_name,
     preferred_contact_method: data.preferred_contact_method,
-  };
-
-  if (data.email) result.email = data.email;
-  if (data.phone) result.phone = data.phone;
-  if (data.city) result.city = data.city;
-  if (data.firm_name) result.firm_name = data.firm_name;
-
-  return result;
+    email: data.email ?? undefined,
+    phone: data.phone ?? undefined,
+    city: data.city ?? undefined,
+    firm_name: data.firm_name ?? undefined,
+  } as Prisma.AvocatCreateInput;
 }
 
 function isUniqueEmailError(error: unknown) {
